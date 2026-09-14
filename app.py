@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -21,19 +20,30 @@ for pais, curva in datos_mercado.items():
         for j in range(i+1, len(nodos)):
             t1 = nodos[i]
             t2 = nodos[j]
-            r1 = curva[t1]
-            r2 = curva[t2]
+            r1 = curva[t1] / 100
+            r2 = curva[t2] / 100
             
-            factor1 = 1.0 + (r1 / 100) * (t1 / 360)
-            factor2 = 1.0 + (r2 / 100) * (t2 / 360)
-            tasa_forward = ((factor2 / factor1) - 1.0) * (360 / (t2 - t1)) * 100
+            # Condicional para separar la convención matemática por país
+            if pais == "Mexico (Cetes)":
+                # Fórmula Interés Simple (Base 360) para México
+                factor1 = 1.0 + r1 * (t1 / 360)
+                factor2 = 1.0 + r2 * (t2 / 360)
+                fwd_decimal = ((factor2 / factor1) - 1.0) * (360 / (t2 - t1))
+            else:
+                # Fórmula Actuarial Compuesta ACTEX (Base 365) para EE. UU. y Francia
+                t1_anos = t1 / 365
+                t2_anos = t2 / 365
+                fwd_decimal = (((1 + r2)**t2_anos / (1 + r1)**t1_anos)**(1 / (t2_anos - t1_anos))) - 1
+            
+            tasa_forward = fwd_decimal * 100
             
             lista_resultados.append({
                 "País": pais,
                 "Nodo Inicial (t1)": t1,
                 "Nodo Final (t2)": t2,
                 "Plazo Forward": t2 - t1,
-                "Tasa Forward (%)": round(tasa_forward, 2)
+                # Subí los decimales a 4 para mayor rigor técnico en la app
+                "Tasa Forward (%)": round(tasa_forward, 4) 
             })
 
 df_completo = pd.DataFrame(lista_resultados)
@@ -46,7 +56,7 @@ st.markdown("---")
 st.markdown("### Selecciona el mercado a visualizar en la matriz y gráfica:")
 pais_elegido = st.selectbox("", list(datos_mercado.keys()), label_visibility="collapsed")
 
-df_pais = df_completo[df_completo["País"] == pais_elegido]
+df_pais = df_completo[df_completo["País"] == pais_elegido].sort_values(by="Tasa Forward (%)", ascending=False)
 
 columna_izquierda, columna_derecha = st.columns([1, 2.5])
 
@@ -79,7 +89,7 @@ with columna_derecha:
         ax.annotate(f"{y:.2f}%", (x, y), textcoords="offset points", xytext=(0, -15), ha='center', fontsize=9, color='#2874A6', fontweight='bold')
         
     if plazos_fwd:
-        ax.plot(plazos_fwd, tasas_fwd, marker='s', color='#E74C3C', linewidth=2.5, linestyle='--', label='Curva Forward')
+        ax.plot(plazos_fwd, tasas_fwd, marker='s', color='#E74C3C', linewidth=2.5, linestyle='--', label='Curva Forward Implícita')
         
         for x, y in zip(plazos_fwd, tasas_fwd):
             idx_spot = plazos_spot.index(x)
@@ -90,7 +100,7 @@ with columna_derecha:
             else:
                 offset_y = 12
                 
-            ax.annotate(f"{y:.2f}%", (x, y), textcoords="offset points", xytext=(0, offset_y), ha='center', fontsize=9, color='#E74C3C', fontweight='bold')
+            ax.annotate(f"{y:.4f}%", (x, y), textcoords="offset points", xytext=(0, offset_y), ha='center', fontsize=9, color='#E74C3C', fontweight='bold')
             
     ax.set_xlabel("Plazo al Vencimiento (Días)", fontsize=10)
     ax.set_ylabel("Tasa de Rendimiento (%)", fontsize=10)
@@ -103,3 +113,5 @@ with columna_derecha:
     ax.patch.set_alpha(0.0)
     
     st.pyplot(fig)
+    
+
